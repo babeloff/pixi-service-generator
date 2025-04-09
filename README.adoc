@@ -1,0 +1,86 @@
+= pixi-service-generator
+
+A service generator for pixi global packages.
+Generally speaking, 
+services are just a specific type of CLI application which is long running,
+and does so in the background,
+not under the direct control of a login session.
+
+nginix:: https://github.com/conda-forge/nginx-feedstock
+solr:: https://github.com/conda-forge/apache-solr-feedstock
+mysql:: https://github.com/conda-forge/mysql-feedstock
+mongo:: https://github.com/conda-forge/mongodb-feedstock
+redis:: https://github.com/conda-forge/redis-py-feedstock
+minio:: https://github.com/conda-forge/minio-feedstock
+
+I would hope these packages to come with their own unit files (or templates).
+The Freva package uses several of these services
+and adds systemd unit files for them.
+freva:: https://github.com/conda-forge/freva-rest-server-feedstock/blob/main/recipe/post-link.sh
+
+== Systemd Generator
+
+https://www.freedesktop.org/software/systemd/man/latest/systemd.generator.html
+
+== Installation
+
+The generator is available as a `pixi` package.
+[source,bash]
+----
+pixi global install pixi-service-generator
+sudo pixi-service-generator init
+----
+The `init` creates single symlinks in two places:
+
+.system services
+/run/systemd/system-generators/*
+/etc/systemd/system-generators/*
+/usr/local/lib/systemd/system-generators/*
+/usr/lib/systemd/system-generators/*
+
+.user services
+/run/systemd/user-generators/*
+/etc/systemd/user-generators/*
+/usr/local/lib/systemd/user-generators/*
+/usr/lib/systemd/user-generators/*
+
+This will induce the `systemctl daemon-reload`
+or `systemctl --user daemon-reload` to run the generator.
+
+== Behavior
+
+When the generator runs it will generate systemd unit-files according to the following rules:
+
+Examine all the environments in the Pixi global manifest.
+For each environment...
+
+Extract information from each package in the environment using
+`~/.pixi/envs/mypkg/conda-meta/*.json` metadata.
+* description
+* name
+* extracted_package_dir
+
+The `extracted_package_dir` is searched for a candidate unit-file
+e.g., `/etc/systemd/mypkg.service`.
+If present, that file becomes be the systemd unit-file (or unit-file template) used.
+The generator uses the candidate or the 
+link:./src/unit.service.template[default template].
+This template is filled out using the metadata previously obtained,
+or using information from the corresponding `pixi-global.toml` service element.
+
+=== Pixi Global TOML : Configuration
+[source,toml]
+----
+[envs.nginx]
+channels = ["conda-forge"]
+dependencies = { nginx = "*" }
+exposed = { nginx = "nginx" }
+service = { status = "enabled", after = "network.target", 
+            exec-start-pre = "$PREFIX/bin/nginx init",
+            exec-start = "$PREFIX/bin/nginx -f $CONDA_PREFIX/etc/nginx/nginx.conf" }
+----
+
+The unit-file thus produced is placed in the 
+
+which effectively enables the service.
+
