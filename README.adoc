@@ -1,4 +1,5 @@
 = pixi-service-generator
+:fdt: https://www.freedesktop.org/software/systemd/man/latest/systemd.generator.html
 
 A service generator for pixi global packages.
 Generally speaking, 
@@ -6,31 +7,31 @@ services are just a specific type of CLI application which is long running,
 and does so in the background,
 not under the direct control of a login session.
 
-nginix:: https://github.com/conda-forge/nginx-feedstock
-solr:: https://github.com/conda-forge/apache-solr-feedstock
-mysql:: https://github.com/conda-forge/mysql-feedstock
-mongo:: https://github.com/conda-forge/mongodb-feedstock
-redis:: https://github.com/conda-forge/redis-py-feedstock
-minio:: https://github.com/conda-forge/minio-feedstock
-
-I would hope these packages to come with their own unit files (or templates).
-The Freva package uses several of these services
-and adds systemd unit files for them.
-freva:: https://github.com/conda-forge/freva-rest-server-feedstock/blob/main/recipe/post-link.sh
+I would expect service packages to provide the metadata 
+sufficient to generate their unit-files.
 
 == Systemd Generator
 
-https://www.freedesktop.org/software/systemd/man/latest/systemd.generator.html
+link:{fdt}[man page for the systemd generator]
+
+"Generators are small executables placed in a generators folder.
+`systemd(1)` will execute these binaries very early at bootup 
+and at configuration reload time —-before unit files are loaded.
+Their main purpose is to convert configuration and execution context parameters
+that are not native to the service manager into dynamically generated unit files,
+symlinks or unit file drop-ins, 
+so that they can extend the unit file hierarchy 
+the service manager subsequently loads and operates on."
 
 == Installation
 
-The generator is available as a `pixi` package.
+This generator is available as a `pixi` package.
 [source,bash]
 ----
 pixi global install pixi-service-generator
 sudo pixi-service-generator init
 ----
-The `init` creates single symlinks in two places:
+The `init` command creates a symlink for system services and one for user services.
 
 .system services
 /run/systemd/system-generators/*
@@ -44,7 +45,8 @@ The `init` creates single symlinks in two places:
 /usr/local/lib/systemd/user-generators/*
 /usr/lib/systemd/user-generators/*
 
-This will induce the `systemctl daemon-reload`
+The presence of this symlink will induce
+the `systemctl daemon-reload`
 or `systemctl --user daemon-reload` to run the generator.
 
 == Behavior
@@ -81,6 +83,20 @@ service = { status = "enabled", after = "network.target",
 ----
 
 The unit-file thus produced is placed in the 
+link:{fdt}#Output%20directories[appropriate output directory].
+"In normal use this is `/run/systemd/generator`
+in case of the system generators and 
+$XDG_RUNTIME_DIR/systemd/generator in case of the user generators.
+Unit files placed in this directory take precedence over vendor unit configuration
+but not over native user/administrator unit configuration." 
+The presence of this file effectively enables the service.
 
-which effectively enables the service.
 
+== Candidate Service Available in `conda-forge`
+
+nginix:: https://github.com/conda-forge/nginx-feedstock
+solr:: https://github.com/conda-forge/apache-solr-feedstock
+mysql:: https://github.com/conda-forge/mysql-feedstock
+mongo:: https://github.com/conda-forge/mongodb-feedstock
+redis:: https://github.com/conda-forge/redis-py-feedstock
+minio:: https://github.com/conda-forge/minio-feedstock
