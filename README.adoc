@@ -29,9 +29,9 @@ This generator is available as a `pixi` package.
 [source,bash]
 ----
 pixi global install systemd-pixi-generator
-sudo systemd-pixi-generator init
+sudo systemd-pixi-generator --mode init
 ----
-The `init` command creates a symlink for system services and one for user services.
+The `init` mode creates one symlink for system services and one for user services.
 
 .system services
 /run/systemd/system-generators/*
@@ -92,7 +92,7 @@ but not over native user/administrator unit configuration."
 The presence of this file effectively enables the service.
 
 
-== Candidate Service Available in `conda-forge`
+== Candidate Services Available in `conda-forge`
 
 nginix:: https://github.com/conda-forge/nginx-feedstock
 solr:: https://github.com/conda-forge/apache-solr-feedstock

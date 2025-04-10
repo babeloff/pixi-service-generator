@@ -1,0 +1,21 @@
+= Developer Guide
+
+[soruce,bash]
+----
+cargo run -- --mode run
+----
+
+The following runs the generator in its normal run mode.
+[source,bash]
+----
+cargo run -- --mode run
+cargo run
+----
+
+The following runs the generator reading from an alternate manifest.
+and writing to an alternate unit-file target.
+[source,bash]
+----
+cargo run -- --mode run --template
+cargo run
+----

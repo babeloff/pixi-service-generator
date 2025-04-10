@@ -1,0 +1,17 @@
+= User Guide
+
+The following run the generator in its normal run mode.
+[source,bash]
+----
+cargo run -- --mode run
+cargo run
+
+systemd-pixi-generator natural_dir
+----
+
+Create the symlinks so that `systemctl daemon_reload` will find the generator.
+[source,bash]
+----
+cargo run -- --mode init
+systemd-pixi-generator --mode init
+----

@@ -1,0 +1,57 @@
+version = 1
+
+
+[envs.nginx]
+channels = ["mesomorph", "conda-forge"]
+dependencies = { freetakserver = "*", freetakserver-ui = "*" }
+exposed = { freetakserver = "freetakserver" }
+[envs.freetakserver.service.freetakserver]
+status = "enabled"
+after = "network.target"
+exec-start = "$PREFIX/bin/nginx -f $CONDA_PREFIX/etc/nginx/nginx.conf"
+
+
+[envs.nodered]
+channels = ["mesomorph", "conda-forge"]
+dependencies = { node-red = "*" }
+exposed = { node-red = "node-red" }
+[envs.node-red.service.node-red]
+status = "enabled"
+after = "network.target"
+description = "Node-Red Network Coordinator"
+exec-start-pre = "$PREFIX/libexec/$PKG_NAME/scripts/init-node-red"
+exec-start = "$PREFIX/bin/nodered"
+
+[envs.medamtx]
+channels = ["mesomorph", "conda-forge"]
+dependencies = { medamtx = "*" }
+exposed = { mediamtx = "medamtx" }
+[envs.mediamtx.service.mediamtx]
+status = "enabled"
+after = "network.target"
+description = "Meda MTX"
+exec-start-pre = "$PREFIX/libexec/$PKG_NAME/scripts/init-mediamtx"
+exec-start = "$PREFIX/bin/mediamtx"
+
+[envs.mumble]
+channels = ["mesomorph", "conda-forge"]
+dependencies = { mumble = "*" }
+exposed = {mumble = "mumble" }
+[envs.mumble.service.mumble]
+status = "enabled"
+after = "network.target"
+description = "Mumble server"
+exec-start-pre = "$PREFIX/libexec/$PKG_NAME/scripts/init-Mumble"
+exec-start = "$PREFIX/bin/Mumble -f $CONDA_PREFIX/share/$PKG_NAME/Mumble/Mumble.yaml"
+
+[envs.mcp-pace]
+channels = ["mesomorph", "conda-forge"]
+dependencies = { mcp-pace = "*" }
+exposed = { mcp-pace = "mcp-pace" }
+[envs.mcp-sync.service.mcp-sync]
+status = "enabled"
+after = "network.target"
+description = "MCP Synchronization and PACE server"
+exec-start-pre = "$PREFIX/libexec/$PKG_NAME/scripts/init-pace"
+exec-start = "$PREFIX/bin/pace-server "
+

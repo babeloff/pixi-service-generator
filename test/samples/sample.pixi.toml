@@ -1,11 +1,57 @@
 version = 1
 
+reference = "https://github.com/conda-forge/freva-rest-server-feedstock/blob/main/recipe/post-link.sh"
+
 [envs.nginx]
 channels = ["mesomorph", "conda-forge"]
 dependencies = { nginx = "*" }
 exposed = { nginx = "nginx" }
 [envs.nginx.service.nginx]
 status = "enabled"
-after = ""
-exec-start-pre = ""
-exec-start = ""
+after = "network.target"
+exec-start = "$PREFIX/bin/nginx -f $CONDA_PREFIX/etc/nginx/nginx.conf"
+
+
+[envs.mysql]
+channels = ["mesomorph", "conda-forge"]
+dependencies = { mysql = "*" }
+exposed = { mysql = "mysql" }
+[envs.mysql.service.mysql]
+status = "enabled"
+after = "network.target"
+description = "MariaDB database server"
+exec-start-pre = "$PREFIX/libexec/$PKG_NAME/scripts/init-mysqld"
+exec-start = "$PREFIX/bin/mysqld --bind-address=0.0.0.0"
+
+[envs.solr]
+channels = ["mesomorph", "conda-forge"]
+dependencies = { solr = "*" }
+exposed = { solr = "solr" }
+[envs.solr.service.solr]
+status = "enabled"
+after = "network.target"
+description = "Apache solr server"
+exec-start-pre = "$PREFIX/libexec/$PKG_NAME/scripts/init-solr"
+exec-start = "$PREFIX/bin/solr -f --force"
+
+[envs.mongodb]
+channels = ["mesomorph", "conda-forge"]
+dependencies = { mongodb = "*" }
+exposed = {mongodb = "mongodb" }
+[envs.mongodb.service.mongodb]
+status = "enabled"
+after = "network.target"
+description = "MongoDB server"
+exec-start-pre = "$PREFIX/libexec/$PKG_NAME/scripts/init-mongo"
+exec-start = "$PREFIX/bin/mongod -f $CONDA_PREFIX/share/$PKG_NAME/mongodb/mongod.yaml"
+
+[envs.redis]
+channels = ["mesomorph", "conda-forge"]
+dependencies = { redis = "*" }
+exposed = { redis = "redis" }
+[envs.redis.service.redis]
+status = "enabled"
+after = "network.target"
+description = "Redis server"
+exec-start-pre = "$PREFIX/libexec/$PKG_NAME/scripts/init-redis"
+exec-start = "$PREFIX/bin/redis-server -f $CONDA_PREFIX/share/$PKG_NAME/redis/redis.config"
