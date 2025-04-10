@@ -5,6 +5,8 @@ use dirs::home_dir;
 use std::path::{Path, PathBuf};
 use tera::{Context, Tera};
 use serde::Serialize;
+
+use std::collections::{HashMap};
 use log::{error, warn, info, debug, trace};
 
 /*
@@ -65,14 +67,15 @@ fn read_template() -> Result<String, Box<dyn std::error::Error>> {
 
 #[derive(Debug, Deserialize)]
 struct Manifest {
-    envs: std::collections::HashMap<String, EnvConfig>,
+    version: toml::Value,
+    envs: HashMap<String, EnvConfig>,
 }
 
 #[derive(Debug, Deserialize)]
 struct EnvConfig {
    channels: Vec<String>,
-   dependencies: std::collections::HashMap<String, String>,
-   exposed: std::collections::HashMap<String, String>,
+   dependencies: HashMap<String, String>,
+   exposed: Option<HashMap<String, String>>,
    service: Option<Service>,
 }
 
@@ -156,7 +159,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             });
     let toml_str = fs::read_to_string(manifest_path)?;
     let manifest: Manifest = toml::from_str(&toml_str)?;
-    debug!("slurped up the pixi global manifest");
+    if !manifest.version.is_integer() {
+        warn!("Manifest {version} is not an integer, version 1 assumed", version=manifest.version);
+    }
+    else if manifest.version.as_integer().is_none() {
+        warn!("Manifest {version} is none, version 1 assumed", version=manifest.version);
+    }
+    else if manifest.version.as_integer() == Some(1) {
+        info!("Global manifest version 1");
+    }
+    else {
+        error!("Manifest {version} is not yet supported", version=manifest.version);
+    }
          
     for (name, env) in manifest.envs {
         info!("Environment: {}", name);
