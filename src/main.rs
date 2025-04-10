@@ -1,12 +1,11 @@
 use serde::Deserialize;
 use std::fs;
 use std::env;
-use std::path::PathBuf;
 use dirs::home_dir;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tera::{Context, Tera};
 use serde::Serialize;
-use log::{info, warn, error, debug, trace};
+use log::{error, warn, info, debug, trace};
 
 /*
 Generators are invoked with three arguments: 
@@ -47,7 +46,7 @@ if the generator is replaced or masked, its effects should vanish.
 */
 
 fn read_template() -> Result<String, Box<dyn std::error::Error>> {
-    debug!("Try to read from environment variable: PIXI_SYSTEMD_UNIT_PATH");
+    trace!("Try to read from environment variable: PIXI_SYSTEMD_UNIT_PATH");
     if let Ok(env_path) = env::var("PIXI_SYSTEMD_UNIT_PATH") {
         let path = Path::new(&env_path);
         if path.exists() && path.is_file() {
@@ -55,9 +54,12 @@ fn read_template() -> Result<String, Box<dyn std::error::Error>> {
         }
     }
 
-    debug!("Fallback: read from project-local file: unit.service.tera");
-    let fallback_path = Path::new("unit.service.tera");
-    Ok(fs::read_to_string(fallback_path)?)
+    trace!("Fallback: read from project-local file: unit.service.tera");
+    let cwd = env::current_dir()?;
+    let unit_template_path = cwd.join("src/resources/unit.service.tera");
+    let template_content = fs::read_to_string(unit_template_path.to_str().unwrap())?;
+    debug!("the content of the template {:?}", template_content);
+    Ok(template_content)
 }
 
 
@@ -142,8 +144,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     debug!("created the output directories (if they did not exist)");
 
-    let tera_path = read_template()?;
-    let tera_content = fs::read_to_string(&tera_path)?;
+    let tera_content = read_template()?;
     let mut tera = Tera::default();
     tera.add_raw_template("template", &tera_content)?;
     debug!("slurped up the unit-file template");
