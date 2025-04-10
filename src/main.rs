@@ -6,6 +6,7 @@ use dirs::home_dir;
 use std::path::Path;
 use tera::{Context, Tera};
 use serde::Serialize;
+use log::{info, warn, error, debug, trace};
 
 /*
 Generators are invoked with three arguments: 
@@ -46,7 +47,7 @@ if the generator is replaced or masked, its effects should vanish.
 */
 
 fn read_template() -> Result<String, Box<dyn std::error::Error>> {
-    // Try to read from environment variable
+    debug!("Try to read from environment variable: PIXI_SYSTEMD_UNIT_PATH");
     if let Ok(env_path) = env::var("PIXI_SYSTEMD_UNIT_PATH") {
         let path = Path::new(&env_path);
         if path.exists() && path.is_file() {
@@ -54,7 +55,7 @@ fn read_template() -> Result<String, Box<dyn std::error::Error>> {
         }
     }
 
-    // Fallback: read from project-local file
+    debug!("Fallback: read from project-local file: unit.service.tera");
     let fallback_path = Path::new("unit.service.tera");
     Ok(fs::read_to_string(fallback_path)?)
 }
@@ -94,23 +95,58 @@ struct TemplateData {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let normal_dir = std::env::args().nth(1).expect("no normal directory");
-    let early_dir = std::env::args().nth(2).expect("no early directory");
-    let late_dir = std::env::args().nth(3).expect("no late directory");
+    env_logger::init();
 
-    // https://doc.rust-lang.org/rust-by-example/hello/print.html
-    println!("directoreies: normal={:?}, early={:?}, late={:?}", 
+    debug!("The first argument is the executable path (possibly a symlink)");
+    let argv0 = env::args().next().unwrap_or_else(|| String::from(""));
+
+    debug!("Get just the filename component (i.e., what the user typed)");
+    let alias = Path::new(&argv0)
+        .file_name()
+        .map(|os_str| os_str.to_string_lossy().into_owned())
+        .unwrap_or_else(|| String::from("unknown"));
+
+    debug!("Optionally resolve symlink to canonical path");
+    let resolved_path = fs::canonicalize(&argv0)?;
+    let real_binary = resolved_path
+        .file_name()
+        .map(|os_str| os_str.to_string_lossy())
+        .unwrap_or_default();
+
+    info!("Alias (invoked as): {}", alias);
+    info!("Resolved to binary: {}", real_binary);
+
+    debug!("grab the symlink name");
+    let args: Vec<String> = env::args().skip(1).collect();
+    let cwd = env::current_dir()?;
+
+    let normal_dir = args.get(0)
+        .map(PathBuf::from)
+        .unwrap_or_else(|| cwd.clone());
+
+    let early_dir = args.get(1)
+        .map(PathBuf::from)
+        .unwrap_or_else(|| cwd.clone());
+
+    let late_dir = args.get(2)
+        .map(PathBuf::from)
+        .unwrap_or_else(|| cwd.clone());
+
+    
+    info!("directories: normal={:?}, early={:?}, late={:?}", 
              normal_dir, early_dir, late_dir);
 
     let output_path = PathBuf::from(normal_dir.clone());
     if let Some(parent) = output_path.parent() {
         fs::create_dir_all(parent)?;
     }
+    debug!("created the output directories (if they did not exist)");
 
     let tera_path = read_template()?;
     let tera_content = fs::read_to_string(&tera_path)?;
     let mut tera = Tera::default();
     tera.add_raw_template("template", &tera_content)?;
+    debug!("slurped up the unit-file template");
              
     let manifest_path = env::var("PIXI_MANIFEST_PATH").unwrap_or_else(|_| {
                 let mut default_path = home_dir().unwrap_or_else(|| PathBuf::from("/"));
@@ -119,18 +155,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             });
     let toml_str = fs::read_to_string(manifest_path)?;
     let manifest: Manifest = toml::from_str(&toml_str)?;
+    debug!("slurped up the pixi global manifest");
          
     for (name, env) in manifest.envs {
-        println!("Environment: {}", name);
-        println!("  Channels: {:?}", env.channels);
-        println!("  Dependencies: {:?}", env.dependencies);
-        println!("  Exposed: {:?}", env.exposed);
-        println!("  Service: {:?}", env.service);
+        info!("Environment: {}", name);
+        info!("  Channels: {:?}", env.channels);
+        info!("  Dependencies: {:?}", env.dependencies);
+        info!("  Exposed: {:?}", env.exposed);
+        info!("  Service: {:?}", env.service);
         if let Some(service) = env.service {
-            println!("{:?}", service.status);
-            println!("{:?}", service.after);
-            println!("{:?}", service.exec_start_pre);
-            println!("{:?}", service.exec_start);
+            info!("{:?}", service.status);
+            info!("{:?}", service.after);
+            info!("{:?}", service.exec_start_pre);
+            info!("{:?}", service.exec_start);
             let data = TemplateData {
                 name: name.clone().into(),
                 description: name.clone().into(),
@@ -143,7 +180,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut output_path = PathBuf::from(normal_dir.clone());
             output_path.push(format!("{}.service", &name));
             fs::write(&output_path, rendered)?;
-            println!("Wrote to: {}", output_path.display());
+            info!("Wrote to: {}", output_path.display());
         }
     }
          

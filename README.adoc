@@ -1,4 +1,4 @@
-= pixi-service-generator
+= systemd-pixi-generator
 :fdt: https://www.freedesktop.org/software/systemd/man/latest/systemd.generator.html
 
 A service generator for pixi global packages.
@@ -28,8 +28,8 @@ the service manager subsequently loads and operates on."
 This generator is available as a `pixi` package.
 [source,bash]
 ----
-pixi global install pixi-service-generator
-sudo pixi-service-generator init
+pixi global install systemd-pixi-generator
+sudo systemd-pixi-generator init
 ----
 The `init` command creates a symlink for system services and one for user services.
 
