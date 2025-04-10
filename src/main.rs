@@ -1,13 +1,12 @@
-use serde::Deserialize;
-use std::fs;
+use clap::{Parser, ValueEnum};
+use std::fs; 
 use std::env;
-use dirs::home_dir;
 use std::path::{Path, PathBuf};
-use tera::{Context, Tera};
-use serde::Serialize;
 
-use std::collections::{HashMap};
 use log::{error, warn, info, debug, trace};
+
+mod init;
+mod run;
 
 /*
 Generators are invoked with three arguments: 
@@ -46,64 +45,35 @@ Note: generators must not write to other locations or otherwise make changes to 
 Generator output is supposed to last only until the next daemon-reload or daemon-reexec; 
 if the generator is replaced or masked, its effects should vanish.
 */
+#[derive(Parser, Debug)]
+#[command(name = "systemd-pixi-generator")]
+#[command(about = "A systemd generator for pixi global environments")]
+#[command(long_about = None)]
+struct Cli {
+    // positional parameters
+    #[arg(required = false, num_args = 0..=3)]
+    dirs: Vec<PathBuf>,
 
-fn read_template() -> Result<String, Box<dyn std::error::Error>> {
-    trace!("Try to read from environment variable: PIXI_SYSTEMD_UNIT_PATH");
-    if let Ok(env_path) = env::var("PIXI_SYSTEMD_UNIT_PATH") {
-        let path = Path::new(&env_path);
-        if path.exists() && path.is_file() {
-            return Ok(fs::read_to_string(path)?);
-        }
-    }
+    // Verbose mode (flag/keyword argument)
+    #[arg(short, long )]
+    verbose: bool,
 
-    trace!("Fallback: read from project-local file: unit.service.tera");
-    let cwd = env::current_dir()?;
-    let unit_template_path = cwd.join("src/resources/unit.service.tera");
-    let template_content = fs::read_to_string(unit_template_path.to_str().unwrap())?;
-    debug!("the content of the template {:?}", template_content);
-    Ok(template_content)
+    // Mode of operation
+    #[arg(long, value_enum, default_value_t = Mode::Run)]
+    mode: Mode,
+
+    // Template Path 
+    #[arg(required = false, short = 't', long = "template")]
+    template_path: Option<PathBuf>,
 }
 
-
-#[derive(Debug, Deserialize)]
-struct Manifest {
-    version: toml::Value,
-    envs: HashMap<String, EnvConfig>,
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, ValueEnum)]
+enum Mode {
+    Run,
+    Init,
 }
 
-#[derive(Debug, Deserialize)]
-struct EnvConfig {
-   channels: Vec<String>,
-   dependencies: HashMap<String, String>,
-   exposed: Option<HashMap<String, String>>,
-   service: Option<Service>,
-}
-
-
-#[derive(Debug, Deserialize)]
-struct Service {
-    status: String,
-    after: Option<String>,
-    #[serde(rename = "exec-start-pre")]
-    exec_start_pre: Option<String>,
-    #[serde(rename = "exec-start")]
-    exec_start: Option<String>,
-}
-
-#[derive(Serialize)]
-struct TemplateData {
-    name: String,
-    description: String,
-    after: String,
-    exec_start_pre: String,
-    exec_start: String,
-}
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    env_logger::init();
-
-    debug!("The first argument is the executable path (possibly a symlink)");
-    let argv0 = env::args().next().unwrap_or_else(|| String::from(""));
+fn grab_base(argv0: String) -> Result<(PathBuf, String), Box<dyn std::error::Error>> {
 
     debug!("Get just the filename component (i.e., what the user typed)");
     let alias = Path::new(&argv0)
@@ -113,91 +83,62 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     debug!("Optionally resolve symlink to canonical path");
     let resolved_path = fs::canonicalize(&argv0)?;
-    let real_binary = resolved_path
-        .file_name()
-        .map(|os_str| os_str.to_string_lossy())
-        .unwrap_or_default();
+    let real_base = {
+        resolved_path
+            .file_name()
+            .map(|os_str| os_str.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    };
 
     info!("Alias (invoked as): {}", alias);
-    info!("Resolved to binary: {}", real_binary);
+    info!("Resolved to binary: {}", real_base);
 
-    debug!("grab the symlink name");
-    let args: Vec<String> = env::args().skip(1).collect();
+    // debug!("grab the symlink name");
+    // Result<Vec<String>, Box<dyn std::error::Error>>
+    // let args: Vec<String> = env::args().skip(1).collect();
+
+    Ok((resolved_path, real_base.to_string()))
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    env_logger::init();
+
+    debug!("The first argument is the executable path (possibly a symlink)");
+    let argv0 = env::args().next().unwrap_or_else(|| String::from(""));
+
+    let (resolved_path, _real_base) = grab_base(argv0)?;
     let cwd = env::current_dir()?;
 
-    let normal_dir = args.get(0)
-        .map(PathBuf::from)
-        .unwrap_or_else(|| cwd.clone());
+    let cli = Cli::parse();
 
-    let early_dir = args.get(1)
-        .map(PathBuf::from)
-        .unwrap_or_else(|| cwd.clone());
+    debug!("Assign default (cwd) if not enough args are given");
+    let mut paths = cli.dirs.clone();
+    while paths.len() < 3 {
+       paths.push(cwd.clone());
+    }
 
-    let late_dir = args.get(2)
-        .map(PathBuf::from)
-        .unwrap_or_else(|| cwd.clone());
+    let [normal_dir, early_dir, late_dir] = 
+        <[PathBuf; 3]>::try_from(paths).expect("Always 3 paths now");
 
-    
+    debug!("Validate paths exist and are directories");
+    for (label, path) in [("normal_dir", &normal_dir),
+                          ("early_dir", &early_dir),
+                          ("late_dir", &late_dir)] {
+        if !path.exists() {
+            error!("Error: path '{}' ({}) does not exist", 
+                   label, path.display());
+            std::process::exit(1);
+        }
+    }
     info!("directories: normal={:?}, early={:?}, late={:?}", 
              normal_dir, early_dir, late_dir);
 
-    let output_path = PathBuf::from(normal_dir.clone());
-    if let Some(parent) = output_path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    debug!("created the output directories (if they did not exist)");
 
-    let tera_content = read_template()?;
-    let mut tera = Tera::default();
-    tera.add_raw_template("template", &tera_content)?;
-    debug!("slurped up the unit-file template");
-             
-    let manifest_path = env::var("PIXI_MANIFEST_PATH").unwrap_or_else(|_| {
-                let mut default_path = home_dir().unwrap_or_else(|| PathBuf::from("/"));
-                default_path.push(".pixi/manifests/pixi-global.toml");
-                default_path.to_string_lossy().into_owned()
-            });
-    let toml_str = fs::read_to_string(manifest_path)?;
-    let manifest: Manifest = toml::from_str(&toml_str)?;
-    if !manifest.version.is_integer() {
-        warn!("Manifest {version} is not an integer, version 1 assumed", version=manifest.version);
-    }
-    else if manifest.version.as_integer().is_none() {
-        warn!("Manifest {version} is none, version 1 assumed", version=manifest.version);
-    }
-    else if manifest.version.as_integer() == Some(1) {
-        info!("Global manifest version 1");
-    }
-    else {
-        error!("Manifest {version} is not yet supported", version=manifest.version);
-    }
-         
-    for (name, env) in manifest.envs {
-        info!("Environment: {}", name);
-        info!("  Channels: {:?}", env.channels);
-        info!("  Dependencies: {:?}", env.dependencies);
-        info!("  Exposed: {:?}", env.exposed);
-        info!("  Service: {:?}", env.service);
-        if let Some(service) = env.service {
-            info!("{:?}", service.status);
-            info!("{:?}", service.after);
-            info!("{:?}", service.exec_start_pre);
-            info!("{:?}", service.exec_start);
-            let data = TemplateData {
-                name: name.clone().into(),
-                description: name.clone().into(),
-                after: "unknown".into(), // service.after,
-                exec_start_pre: "missing".into(),
-                exec_start: "missing".into(),
-            };
-            let content = Context::from_serialize(&data)?;
-            let rendered = tera.render("template", &content)?;
-            let mut output_path = PathBuf::from(normal_dir.clone());
-            output_path.push(format!("{}.service", &name));
-            fs::write(&output_path, rendered)?;
-            info!("Wrote to: {}", output_path.display());
-        }
-    }
+    let _ = match cli.mode {
+        Mode::Init => init::initialize(resolved_path),
+        Mode::Run => run::run(normal_dir, early_dir, late_dir, 
+            cli.template_path),
+    };
          
     Ok(())
 }

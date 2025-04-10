@@ -1,0 +1,11 @@
+version = 1
+
+[envs.nginx]
+channels = ["mesomorph", "conda-forge"]
+dependencies = { nginx = "*" }
+exposed = { nginx = "nginx" }
+[envs.nginx.service.nginx]
+status = "enabled"
+after = ""
+exec-start-pre = ""
+exec-start = ""
