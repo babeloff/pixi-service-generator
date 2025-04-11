@@ -34,20 +34,23 @@ sudo systemd-pixi-generator --mode init
 The `init` mode creates one symlink for system services and one for user services.
 
 .system services
+[source,text]
 /run/systemd/system-generators/*
 /etc/systemd/system-generators/*
 /usr/local/lib/systemd/system-generators/*
 /usr/lib/systemd/system-generators/*
 
 .user services
+[source,text]
 /run/systemd/user-generators/*
 /etc/systemd/user-generators/*
 /usr/local/lib/systemd/user-generators/*
 /usr/lib/systemd/user-generators/*
 
-The presence of this symlink will induce
+The presence of these symlinks will induce
 the `systemctl daemon-reload`
-or `systemctl --user daemon-reload` to run the generator.
+or `systemctl --user daemon-reload`
+to run the generator.
 
 == Behavior
 
