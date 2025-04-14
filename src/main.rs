@@ -62,6 +62,10 @@ struct Cli {
     #[arg(long, value_enum, default_value_t = Mode::Run)]
     mode: Mode,
 
+    // Manifest Path 
+    #[arg(required = false, short = 'm', long = "manifest")]
+    manifest_path: Option<PathBuf>,
+
     // Template Path 
     #[arg(required = false, short = 't', long = "template")]
     template_path: Option<PathBuf>,
@@ -137,7 +141,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = match cli.mode {
         Mode::Init => init::initialize(resolved_path),
         Mode::Run => run::run(normal_dir, early_dir, late_dir, 
-            cli.template_path),
+                    cli.template_path, 
+                    cli.manifest_path),
     };
          
     Ok(())

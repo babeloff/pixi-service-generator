@@ -1,14 +1,13 @@
+use log::{debug, error, info, trace, warn};
 
-use log::{error, warn, info, debug, trace};
-
-use std::fs; 
-use std::env;
 use serde::Deserialize;
+use std::env;
+use std::fs;
+use std::io;
 
-use dirs::home_dir;
+use serde::Serialize;
 use std::path::{Path, PathBuf};
 use tera::{Context, Tera};
-use serde::Serialize;
 
 use std::collections::HashMap;
 
@@ -20,12 +19,11 @@ struct Manifest {
 
 #[derive(Debug, Deserialize)]
 struct EnvConfig {
-   channels: Vec<String>,
-   dependencies: HashMap<String, String>,
-   exposed: Option<HashMap<String, String>>,
-   service: Option<Service>,
+    channels: Vec<String>,
+    dependencies: HashMap<String, String>,
+    exposed: Option<HashMap<String, String>>,
+    service: Option<Service>,
 }
-
 
 #[derive(Debug, Deserialize)]
 struct Service {
@@ -47,13 +45,7 @@ struct TemplateData {
 }
 
 fn read_template(template_path: Option<PathBuf>) -> Result<String, Box<dyn std::error::Error>> {
-    trace!("Try to read from environment variable: PIXI_SYSTEMD_UNIT_PATH");
-    if let Ok(local_path) = env::var("PIXI_SYSTEMD_UNIT_PATH") {
-        let path = Path::new(&local_path);
-        if path.exists() && path.is_file() {
-            return Ok(fs::read_to_string(path)?);
-        }
-    }
+    trace!("Try to read systemd unit-file template");
     if let Some(tpath) = template_path {
         let path = Path::new(&tpath);
         if path.exists() && path.is_file() {
@@ -69,8 +61,31 @@ fn read_template(template_path: Option<PathBuf>) -> Result<String, Box<dyn std::
     Ok(template_content)
 }
 
-pub fn run(normal_dir: PathBuf, early_dir: PathBuf, late_dir: PathBuf, 
-           template_dir: Option<PathBuf>) -> Result<(), Box<dyn std::error::Error>> {
+fn read_manifest(manifest_path: Option<PathBuf>) -> Result<String, io::Error> {
+    trace!("Try to read pixi global manifest");
+    if let Some(path) = manifest_path {
+        match fs::read_to_string(&path) {
+            Ok(content) => return Ok(content),
+            Err(_) => {
+                // Fall through to fallback path
+            }
+        }
+    }
+
+    debug!("Try the manifest fallback path");
+    let fallback = dirs::home_dir()
+        .map(|home| home.join(".pixi/manifests/pixi-global.toml"))
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "HOME directory not found"))?;
+    fs::read_to_string(fallback)
+}
+
+pub fn run(
+    normal_dir: PathBuf,
+    early_dir: PathBuf,
+    late_dir: PathBuf,
+    template_dir: Option<PathBuf>,
+    manifest_path: Option<PathBuf>,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("Running the application!");
 
     let normal_path = PathBuf::from(normal_dir.clone());
@@ -91,28 +106,26 @@ pub fn run(normal_dir: PathBuf, early_dir: PathBuf, late_dir: PathBuf,
     let mut tera = Tera::default();
     tera.add_raw_template("template", &tera_content)?;
     debug!("slurped up the unit-file template");
-             
-    let manifest_path = env::var("PIXI_MANIFEST_PATH").unwrap_or_else(|_| {
-                let mut default_path = home_dir().unwrap_or_else(|| PathBuf::from("/"));
-                default_path.push(".pixi/manifests/pixi-global.toml");
-                default_path.to_string_lossy().into_owned()
-            });
-    let toml_str = fs::read_to_string(manifest_path)?;
+
+    let toml_str = read_manifest(manifest_path)?;
     let manifest: Manifest = toml::from_str(&toml_str)?;
 
     if !manifest.version.is_integer() {
-        warn!("Manifest {version} is not an integer, version 1 assumed", version=manifest.version);
-    }
-    else if let Some(version) = manifest.version.as_integer() {
+        warn!(
+            "Manifest {version} is not an integer, version 1 assumed",
+            version = manifest.version
+        );
+    } else if let Some(version) = manifest.version.as_integer() {
         if version == 1 {
             info!("Global manifest version 1");
+        } else {
+            error!("Manifest {version} is not yet supported", version = version);
         }
-        else {
-            error!("Manifest {version} is not yet supported", version=version);
-        }
-    }
-    else {
-        error!("Manifest {version} is none, version 1 assumed", version=manifest.version);
+    } else {
+        error!(
+            "Manifest {version} is none, version 1 assumed",
+            version = manifest.version
+        );
     }
 
     for (name, env) in manifest.envs {
