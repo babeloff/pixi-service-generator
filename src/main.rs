@@ -1,11 +1,13 @@
 use clap::{Parser, ValueEnum};
+use log::warn;
 use std::fs; 
 use std::env;
 use std::path::{Path, PathBuf};
 
-use log::{error, warn, info, debug, trace};
+use log::{error, info, debug };
 
-mod init;
+mod config;
+mod install;
 mod run;
 
 /*
@@ -104,13 +106,40 @@ fn grab_base(argv0: String) -> Result<(PathBuf, String), Box<dyn std::error::Err
     Ok((resolved_path, real_base.to_string()))
 }
 
+enum Privilege {
+    SYSTEM,
+    USER,
+    DENY,
+}
+
+fn check_base(name: String) -> Privilege {
+    warn!("name check {}", name);
+    if config::SYSTEM_EXEC_NAME == name {
+        info!("System level");
+        Privilege::SYSTEM
+    }
+    else if config::USER_EXEC_NAME == name { 
+        info!("User level");
+        Privilege::USER
+    } 
+    else {
+        Privilege::DENY
+    }
+}
+
+fn check_normal_dir(normal_dir: PathBuf) -> bool {
+    warn!("normal dir check {}", normal_dir.into_os_string().into_string().unwrap());
+    true
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
 
     debug!("The first argument is the executable path (possibly a symlink)");
     let argv0 = env::args().next().unwrap_or_else(|| String::from(""));
 
-    let (resolved_path, _real_base) = grab_base(argv0)?;
+    let (resolved_path, real_base) = grab_base(argv0)?;
+    check_base(real_base);
     let cwd = env::current_dir()?;
 
     let cli = Cli::parse();
@@ -134,12 +163,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             std::process::exit(1);
         }
     }
+    check_normal_dir(normal_dir.clone());
     info!("directories: normal={:?}, early={:?}, late={:?}", 
              normal_dir, early_dir, late_dir);
 
 
     let _ = match cli.mode {
-        Mode::Init => init::initialize(resolved_path),
+        Mode::Init => install::initialize(resolved_path),
         Mode::Run => run::run(normal_dir, early_dir, late_dir, 
                     cli.template_path, 
                     cli.manifest_path),

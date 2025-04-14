@@ -1,7 +1,6 @@
 use std::path::{Path, PathBuf};
-use std::fs;
 use std::os::unix::fs::symlink;
-use log::{error, warn, info, debug, trace};
+use log::{info, debug, trace};
 
 /*
 The purpose of init is to provide symlinks
@@ -12,7 +11,11 @@ https://www.freedesktop.org/software/systemd/man/latest/systemd.generator.html
 
 */
 
+use crate::config::SYSTEM_EXEC_NAME;
+use crate::config::USER_EXEC_NAME;
+
 fn create_symlink(source_path: PathBuf, target_path: PathBuf) -> std::io::Result<()> {
+    trace!("create symlink ");
     let target = Path::new(&target_path);
     let source = Path::new(&source_path);
 
@@ -30,20 +33,23 @@ pub fn initialize(source_path: PathBuf)  -> Result<(), Box<dyn std::error::Error
         PathBuf::from("/usr/local/lib/systemd/system-generators/"),
         PathBuf::from("/usr/lib/systemd/system-generators/"),
     ];
-    for target_path in &system_paths {
+    for mut target_path in system_paths.clone() {
+        target_path.push(SYSTEM_EXEC_NAME);
         debug!("{}", target_path.display());
         let rc = create_symlink(source_path.clone(), target_path.to_path_buf());
         if rc.is_ok() {
             break;
         };
     }
+
     let user_paths: [PathBuf; 4] = [
         PathBuf::from("/run/systemd/user-generators/"),
         PathBuf::from("/etc/systemd/user-generators/"),
         PathBuf::from("/usr/local/lib/systemd/user-generators/"),
         PathBuf::from("/usr/lib/systemd/user-generators/"),
     ];
-    for target_path in &user_paths {
+    for mut target_path in user_paths.clone() {
+        target_path.push(USER_EXEC_NAME);
         debug!("{}", target_path.display());
         let rc = create_symlink(source_path.clone(), target_path.to_path_buf());
         if rc.is_ok() {
