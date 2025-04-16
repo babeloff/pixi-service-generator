@@ -11,6 +11,8 @@ use tera::{Context, Tera};
 
 use std::collections::HashMap;
 
+use crate::config;
+
 #[derive(Debug, Deserialize)]
 struct Manifest {
     version: toml::Value,
@@ -44,7 +46,7 @@ struct TemplateData {
     exec_start: String,
 }
 
-fn read_template(template_path: Option<PathBuf>) -> Result<String, Box<dyn std::error::Error>> {
+fn read_template(template_path: Option<PathBuf>, privilege: config::Privilege) -> Result<String, Box<dyn std::error::Error>> {
     trace!("Try to read systemd unit-file template");
     if let Some(tpath) = template_path {
         let path = Path::new(&tpath);
@@ -55,7 +57,11 @@ fn read_template(template_path: Option<PathBuf>) -> Result<String, Box<dyn std::
 
     trace!("Fallback: read from project-local file: unit.service.tera");
     let cwd = env::current_dir()?;
-    let unit_template_path = cwd.join("src/resources/unit.service.tera");
+    let unit_template_path = match privilege {
+        config::Privilege::SYSTEM => cwd.join(config::SYSTEM_UNIT_FILE_TEMPLATE),
+        config::Privilege::USER => cwd.join(config::USER_UNIT_FILE_TEMPLATE),
+        config::Privilege::UNSPEC => cwd.join(config::USER_UNIT_FILE_TEMPLATE),
+    };
     let template_content = fs::read_to_string(unit_template_path.to_str().unwrap())?;
     debug!("the content of the template {:?}", template_content);
     Ok(template_content)
@@ -83,6 +89,7 @@ pub fn run(
     normal_dir: PathBuf,
     early_dir: PathBuf,
     late_dir: PathBuf,
+    privilege: config::Privilege,
     template_dir: Option<PathBuf>,
     manifest_path: Option<PathBuf>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -102,7 +109,7 @@ pub fn run(
     }
     debug!("created the output directories (if they did not exist)");
 
-    let tera_content = read_template(template_dir)?;
+    let tera_content = read_template(template_dir, privilege)?;
     let mut tera = Tera::default();
     tera.add_raw_template("template", &tera_content)?;
     debug!("slurped up the unit-file template");

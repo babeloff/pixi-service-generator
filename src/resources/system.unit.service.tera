@@ -11,6 +11,8 @@ ProtectHome=true
 KillSignal=SIGTERM
 SendSIGKILL=no
 Restart=on-abort
+# The XDG environment variables should be set in 
+# https://www.freedesktop.org/software/systemd/man/latest/systemd.environment-generator.html
 ExecStartPre=/bin/sh -c "systemctl unset-environment _WSREP_START_POSITION"
 ExecStartPre={{EXEC_START_PRE}}
 ExecStart={{EXEC_START}}

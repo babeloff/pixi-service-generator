@@ -61,6 +61,7 @@ For each environment...
 
 Extract information from each package in the environment using
 `~/.pixi/envs/mypkg/conda-meta/*.json` metadata.
+
 * description
 * name
 * extracted_package_dir

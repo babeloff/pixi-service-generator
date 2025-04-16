@@ -106,24 +106,29 @@ fn grab_base(argv0: String) -> Result<(PathBuf, String), Box<dyn std::error::Err
     Ok((resolved_path, real_base.to_string()))
 }
 
-enum Privilege {
-    SYSTEM,
-    USER,
-    DENY,
-}
-
-fn check_base(name: String) -> Privilege {
+/*
+https://www.freedesktop.org/software/systemd/man/latest/systemd.generator.html#Environment
+*/
+fn check_base(name: String) -> config::Privilege {
     warn!("name check {}", name);
-    if config::SYSTEM_EXEC_NAME == name {
-        info!("System level");
-        Privilege::SYSTEM
-    }
-    else if config::USER_EXEC_NAME == name { 
-        info!("User level");
-        Privilege::USER
-    } 
-    else {
-        Privilege::DENY
+    match env::var("SYSTEMD_SCOPE") {
+        Ok(scope) => 
+            if scope == name {
+                info!("System level");
+                config::Privilege::SYSTEM
+            }
+            else if scope == name { 
+                info!("User level");
+                config::Privilege::USER
+            }
+            else {
+                warn!("SYSTEMD_SCOPE is not a valid value {}", scope);
+                config::Privilege::UNSPEC
+            },
+        Err(_) => {
+            warn!("SYSTEMD_SCOPE is not set");
+            config::Privilege::UNSPEC
+        } 
     }
 }
 
@@ -139,7 +144,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let argv0 = env::args().next().unwrap_or_else(|| String::from(""));
 
     let (resolved_path, real_base) = grab_base(argv0)?;
-    check_base(real_base);
+    let privilege = check_base(real_base);
     let cwd = env::current_dir()?;
 
     let cli = Cli::parse();
@@ -171,7 +176,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = match cli.mode {
         Mode::Init => install::initialize(resolved_path),
         Mode::Run => run::run(normal_dir, early_dir, late_dir, 
-                    cli.template_path, 
+                    privilege, cli.template_path, 
                     cli.manifest_path),
     };
          
