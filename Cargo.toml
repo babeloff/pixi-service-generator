@@ -11,5 +11,5 @@ tera = "1.19"
 log = "0.4.27"
 env_logger = "0.11.8"
 serde_derive = "1.0.219"
-clap = { version = "4.5.36",  features = ["derive"] }
+clap = { version = "4.5.37",  features = ["derive"] }
 xdg = "2.5.2"
